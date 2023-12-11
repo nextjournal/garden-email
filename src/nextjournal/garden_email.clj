@@ -68,17 +68,17 @@
 
 ;TODO validate (malli?)
 (defn send-email! [{:as opts :keys [from to subject text html attachments]}]
-  (if dev-mode?
-    (mock/send-email opts)
-    (send-real-email! opts)))
+  (let [opts (merge {:from {:email my-email-address}} opts)]
+    (if dev-mode?
+      (mock/send-email opts)
+      (send-real-email! opts))))
 
-; TODO reply
-(defn reply! [{:as to :keys [subject reply-to msg-id]} email]
+(defn reply! [{:keys [subject from reply-to msg-id]} email]
   (send-email! (merge
-                {:subject (str "RE: " subject)}
+                {:subject (str "Re: " subject)}
                 email
-                {:to reply-to
-                 :msg-id msg-id})))
+                {:to (or reply-to from)
+                 :headers {"In-Reply-To" msg-id}})))
 
 (defn wrap-with-email
   ([f]
