@@ -17,6 +17,11 @@
 
 (def my-email-address (System/getenv "GARDEN_EMAIL_ADDRESS"))
 
+(defn plus-address
+  ([plus]
+   (plus-address my-email-address plus))
+  ([email-address plus]
+   (str/replace-first email-address "@" (str "+" plus "@"))))
 
 (defn- json-request? [request]
   (when-let [type (get-in request [:headers "content-type"])]
