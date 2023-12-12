@@ -88,6 +88,8 @@
    (reset! mock/on-receive f)
    (fn [req]
      (cond
-       (= "/.application.garden/email" (:uri req)) (handle-receive on-receive req)
-       (and dev-mode? (= "/.application.garden/outbox" (:uri req))) {:status 200 :body (mock/render-outbox)}
+       (= "/.application.garden/receive-email" (:uri req)) (handle-receive on-receive req)
+       (and dev-mode? (= "/.application.garden/outbox" (:uri req))) {:status 200
+                                                                     :headers {"Content-Type" "text/html"}
+                                                                     :body (mock/render-outbox)}
        :else (f req)))))
