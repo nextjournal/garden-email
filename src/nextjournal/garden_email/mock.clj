@@ -1,14 +1,26 @@
 (ns nextjournal.garden-email.mock
-  (:require [huff.core :as h]))
+  (:require [huff.core :as h]
+            [nextjournal.garden-email.render :as render]))
 
 
-(defonce outbox (atom []))
+(defonce outbox (atom {}))
 (defonce on-receive (atom nil))
 
-(defn send-email [{:as email :keys [from to subject html-body attachments]}]
-  (swap! outbox conj email))
+(defn- mock-email-http-response [_data]
+  {:status 200})
 
-(defn receive-email [{:as email :keys [from to subject html-body attachments]}]
+(defn- ok-email-respones? [{:keys [status]}]
+  (#{202 200} status))
+
+(defn send-email [{:as email :keys [from to subject text html attachments]}]
+  (let [message-id (str "<" (random-uuid) "@nextjournal.com>")
+        data (assoc email :message-id message-id)
+        response (mock-email-http-response data)]
+    (when (ok-email-respones? response)
+      (swap! outbox assoc message-id data))
+    response))
+
+(defn receive-email [{:as email :keys [message-id from to subject text html attachments]}]
   (if-let [on-receive @on-receive]
     (on-receive email)
     (throw (ex-info "No on-receive hook configured. Did you forget to wrap your app with nextjournal.garden-email/wrap-with-email?" {}))))
@@ -39,11 +51,6 @@
 
 (defn render-outbox []
   (->html
-    [:div.flex.flex-col.text-white
-     [:p "Sent emails:"]
-     (for [{:keys [from to subject html-body]} @outbox]
-       [:div.outline.rounded-md.flex.flex-col
-        [:span "From:" from]
-        [:span "To:" to]
-        [:span "Subject:" subject]
-        (when html-body {:hiccup/raw-html html-body})])]))
+   [:div.flex.flex-col.text-white
+    [:p "Sent emails:"]
+    (render/render-mailbox @outbox)]))

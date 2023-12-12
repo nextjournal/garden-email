@@ -51,6 +51,10 @@ When running your application locally in development, no actual emails are sent.
 
 To mock incoming email, you can call `nextjournal.garden-email.mock/receive-email`.
 
+## Mailbox
+
+`nextjournal.garden-email.render` has helper functions to render a mailbox.
+
 ## Example
 
 See `example` for an example application.

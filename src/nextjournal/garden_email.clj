@@ -1,10 +1,12 @@
 (ns nextjournal.garden-email
   (:require [clojure.edn :as edn]
-   [babashka.http-client :as http]
+            [babashka.http-client :as http]
             [babashka.fs :as fs]
             [cheshire.core :as json]
             [ring.util.request :refer [character-encoding]]
-            [nextjournal.garden-email.mock :as mock])
+            [ring.util.codec :as codec]
+            [nextjournal.garden-email.mock :as mock]
+            [clojure.string :as str])
   (:import [java.io InputStream]))
 
 (def auth-token (System/getenv "GARDEN_TOKEN"))
@@ -56,9 +58,11 @@
   (doseq [mail (fs/list-dir inbox-path)]
     (fs/delete mail)))
 
-(defn inbox []
-  (map (fn [path] (edn/read-string (slurp (str path)))) (try (fs/list-dir inbox-path)
-                                                             (catch java.nio.file.NoSuchFileException e nil))))
+(defn inbox
+  ([] (map (fn [path] (edn/read-string (slurp (str path)))) (try (fs/list-dir inbox-path)
+                                                                 (catch java.nio.file.NoSuchFileException e nil))))
+  ([message-id] (try (edn/read-string (slurp (str (fs/path inbox-path message-id))))
+                     (catch Exception _ nil))))
 
 (defn- send-real-email! [{:as opts :keys [from to subject text html attachments]}]
   (http/post (str email-endpoint "/send")
@@ -80,6 +84,19 @@
                 {:to (or reply-to from)
                  :headers {"In-Reply-To" msg-id}})))
 
+(defn- strip-prefix [prefix s]
+  (if (str/starts-with? s prefix)
+    (subs s (count prefix))
+    s))
+
+(defn- handle-render-email [{:keys [uri]}]
+  (let [message-id (codec/url-decode (strip-prefix "/.application.garden/render-email/" uri))]
+    (if-let [email (or (inbox message-id) (@mock/outbox message-id))]
+      {:status 200
+       :headers {"Content-Type" "text/html"}
+       :body (:html email)}
+      {:status 404})))
+
 (defn wrap-with-email
   ([f]
    (wrap-with-email f {}))
@@ -92,4 +109,5 @@
        (and dev-mode? (= "/.application.garden/outbox" (:uri req))) {:status 200
                                                                      :headers {"Content-Type" "text/html"}
                                                                      :body (mock/render-outbox)}
+       (str/starts-with? (:uri req) "/.application.garden/render-email/") (handle-render-email req)
        :else (f req)))))

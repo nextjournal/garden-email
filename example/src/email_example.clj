@@ -1,6 +1,7 @@
 (ns email-example
   (:require [nrepl.server]
             [nextjournal.garden-email :as garden-email]
+            [nextjournal.garden-email.render :as render]
             [org.httpkit.server :as httpkit]
             [ring.middleware.params :as ring.params]
             [huff.core :as h]
@@ -20,27 +21,10 @@
     [:textarea {:name "html"}]
     [:input {:type "submit" :value "send"}]]])
 
-(defn render-email-address [{:keys [email name]}]
-  (if name
-    (str name "<" email ">")
-    email))
-
-(defn render-email [{:keys [from to subject text html]}]
-  [:div {:style "display:flex;flex-direction:column;"}
-   [:span [:span "From:"] (render-email-address from)]
-   [:span [:span "To:"] (render-email-address to)]
-   [:span [:span "Subject:"] subject]
-   (if html
-     [:hiccup/raw-html html]
-     [:pre text])])
-
 (defn render-inbox []
   [:div
    [:h1 "Inbox (" garden-email/my-email-address ")"]
-   (if-let [emails (seq (garden-email/inbox))]
-     [:ul (for [email emails]
-            [:li (render-email email)])]
-     [:p "empty"])])
+   (render/render-mailbox (garden-email/inbox))])
 
 (defn html-response [& contents]
   {:status 200
