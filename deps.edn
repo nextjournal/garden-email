@@ -1,0 +1,7 @@
+{:paths ["src"]
+ :deps {org.babashka/http-client {:mvn/version "0.4.15"}
+        babashka/fs {:mvn/version "0.4.19"}
+        cheshire/cheshire {:mvn/version "5.12.0"}
+        io.github.escherize/huff {:mvn/version "0.1.0"}}
+ :aliases
+ {:example {:extra-deps {example/example {:local/root "example"}}}}}
