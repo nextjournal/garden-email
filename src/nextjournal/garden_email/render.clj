@@ -11,7 +11,7 @@
    [:span [:span "To:"] (render-email-address to)]
    [:span [:span "Subject:"] subject]
    (if html
-     [:iframe {:src (str "/.application.garden/render-email/" message-id)}]
+     [:iframe {:src (str "/.application.garden/garden-email/render-email/" message-id)}]
      [:pre text])])
 
 (defn render-mailbox [emails]

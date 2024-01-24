@@ -94,13 +94,12 @@
     (subs s (count prefix))
     s))
 
-(defn- handle-render-email [{:keys [uri]}]
-  (let [message-id (codec/url-decode (strip-prefix "/.application.garden/render-email/" uri))]
-    (if-let [email (or (inbox message-id) (@mock/outbox message-id))]
-      {:status 200
-       :headers {"Content-Type" "text/html"}
-       :body (:html email)}
-      {:status 404})))
+(defn- handle-render-email [message-id]
+  (if-let [email (or (inbox message-id) (@mock/outbox message-id))]
+    {:status 200
+     :headers {"Content-Type" "text/html"}
+     :body (:html email)}
+    {:status 404}))
 
 (defn wrap-with-email
   ([f]
@@ -109,10 +108,14 @@
        :or {on-receive save-to-inbox!}}]
    (reset! mock/on-receive f)
    (fn [req]
-     (cond
-       (= "/.application.garden/receive-email" (:uri req)) (handle-receive on-receive req)
-       (and dev-mode? (= "/.application.garden/outbox" (:uri req))) {:status 200
-                                                                     :headers {"Content-Type" "text/html"}
-                                                                     :body (mock/render-outbox)}
-       (str/starts-with? (:uri req) "/.application.garden/render-email/") (handle-render-email req)
-       :else (f req)))))
+     (if-not (str/starts-with? (:uri req) "/.application.garden/garden-email")
+       (f req)
+       (let [path (strip-prefix "/.application.garden/garden-email" (:uri req))]
+         (cond
+           (= "/receive-email" path) (handle-receive on-receive req)
+           (and dev-mode? (= "/mock-outbox" path)) {:status 200
+                                                    :headers {"Content-Type" "text/html"}
+                                                    :body (mock/render-outbox)}
+           (str/starts-with? path "/render-email/") (let [message-id (codec/url-decode (strip-prefix "/render-email/" path))]
+                                                      (handle-render-email message-id))
+           :else {:status 404}))))))
