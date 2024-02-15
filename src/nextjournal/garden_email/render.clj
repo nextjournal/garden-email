@@ -1,9 +1,11 @@
 (ns nextjournal.garden-email.render)
 
-(defn render-email-address [{:keys [email name]}]
+#_(defn render-email-address [{:keys [email name]}]
   (if name
     (str name "<" email ">")
     email))
+
+(def render-email-address identitiy)
 
 (defn render-email [{:keys [message-id from to subject text html]}]
   [:div {:style "display:flex;flex-direction:column;"}
@@ -16,5 +18,5 @@
 
 (defn render-mailbox [emails]
   [:div.flex.flex-col.text-white
-   (for [email emails]
+   (for [[_id email] emails]
      (render-email email))])
