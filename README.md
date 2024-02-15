@@ -47,7 +47,7 @@ If you do not provide a custom callback, garden-email saves incoming email to a 
 
 ## Development
 
-When running your application locally in development, no actual emails are sent. Instead we collect mock-emails, which you can view at `/.application.garden/garden-email/outbox`, assuming you have added the ring middleware to your handler.
+When running your application locally in development, no actual emails are sent. Instead we collect mock-emails, which you can view at `/.application.garden/garden-email/mock-outbox`, assuming you have added the ring middleware to your handler.
 
 To mock incoming email, you can call `nextjournal.garden-email.mock/receive-email`.
 
