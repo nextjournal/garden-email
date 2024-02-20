@@ -42,7 +42,7 @@
   [:ul
    [:li [:a {:href "send"} "send email"]]
    [:li [:a {:href "inbox"} "inbox"]]
-   (when garden-email/dev-mode? [:li [:a {:href ".application.garden/outbox"} "dev outbox"]])])
+   (when garden-email/dev-mode? [:li [:a {:href garden-email/mock-outbox-url} "dev outbox"]])])
 
 (defn page [& contents]
   (vec (concat [:div
@@ -59,8 +59,8 @@
                                                          :subject subject}
                                                   (not (str/blank? text)) (assoc :text text)
                                                   (not (str/blank? html)) (assoc :html html)))
-                        {:status 302
-                         :headers {"Location" "/send"}})
+                      {:status 302
+                       :headers {"Location" "/send"}})
               {:status 405})
     "/inbox" (html-response (page (render-inbox)))
 

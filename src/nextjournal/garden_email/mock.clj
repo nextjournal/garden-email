@@ -1,29 +1,54 @@
 (ns nextjournal.garden-email.mock
   (:require [huff.core :as h]
-            [nextjournal.garden-email.render :as render]))
+            [ring.util.codec :as codec]
+            [nextjournal.garden-email.render :as render]
+            [nextjournal.garden-email.footer :as footer]
+            [clojure.string :as str]))
 
+
+(defonce notification-statuses (atom {}))
+
+(defn notification-status [email-address]
+  (@notification-statuses email-address))
+
+(def ^:private host "http://localhost:7777")
+(def ^:private prefix "/.application.garden/garden-email/mock/")
+
+(defn confirmation-link [email-address]
+  (str host prefix "confirm/" email-address))
+(defn block-link [email-address]
+  (str host prefix "block/" email-address))
+(defn report-spam-link [email-address]
+  (str host prefix "report-spam/" email-address))
 
 (defonce outbox (atom {}))
 (defonce on-receive (atom nil))
 
-(defn- mock-email-http-response [{:keys [message-id]}]
-  {:status 200 :body message-id})
-
-(defn- ok-email-respones? [{:keys [status]}]
-  (#{202 200} status))
+(defn clear-outbox! []
+  (reset! outbox {}))
 
 (defn send-email [{:as email :keys [from to subject text html attachments]}]
   (let [message-id (str "<" (random-uuid) "@nextjournal.com>")
-        data (assoc email :message-id message-id)
-        response (mock-email-http-response data)]
-    (when (ok-email-respones? response)
-      (swap! outbox assoc message-id data))
-    response))
+        recipient-address (:email to)
+        notification-status (notification-status recipient-address)
+        transformed-email (footer/transform-email notification-status
+                                                  {:subscribe-link (confirmation-link recipient-address)
+                                                   :block-link (block-link recipient-address)
+                                                   :report-spam-link (report-spam-link recipient-address)}
+                                                  email)
+        data (assoc transformed-email :message-id message-id)]
+    (if (#{:notification.status/pending :notification.status/blocked} notification-status)
+      {:status 403 :body "You are not allowed to send emails to the recipient. The recipient needs to allow sending"}
+      (do (swap! outbox assoc message-id data)
+          (when (nil? notification-status)
+            (swap! notification-statuses assoc recipient-address :notification.status/pending))
+          {:status 200
+           :body message-id}))))
 
 (defn receive-email [{:as email :keys [message-id from to subject text html attachments]}]
   (if-let [on-receive @on-receive]
     (on-receive email)
-    (throw (ex-info "No on-receive hook configured. Did you forget to wrap your app with nextjournal.garden-email/wrap-with-email?" {}))))
+    (throw (ex-info "No on-receive hook configured. Did you forget to wrap your app with `nextjournal.garden-email/wrap-with-email`?" {}))))
 
 (def ^:private tw-config
   "tailwind.config = { theme: {fontFamily: { sans: [\"Fira Sans\", \"-apple-system\", \"BlinkMacSystemFont\", \"sans-serif\"], serif: [\"PT Serif\", \"serif\"], mono: [\"Fira Mono\", \"monospace\"] } } }")
@@ -52,5 +77,49 @@
 (defn render-outbox []
   (->html
    [:div.flex.flex-col.text-white
+    [:a.block.p-2.m-2.rounded.bg-emerald-700 {:href "clear"} "Clear outbox"]
     [:p "Sent emails:"]
     (render/render-mailbox @outbox)]))
+
+(defn- strip-prefix [prefix s]
+  (if (str/starts-with? s prefix)
+    (subs s (count prefix))
+    s))
+
+(def outbox-url "/.application.garden/garden-email/mock/outbox/")
+
+(defn html-response [& contents]
+  {:status 200
+   :headers {"Content-Type" "text/html"}
+   :body (apply ->html contents)})
+
+(defn redirect [to]
+  {:status 302
+   :headers {"location" to}})
+
+(defn wrap-with-mock-outbox [app]
+  (fn [{:as req :keys [uri]}]
+    (if-not (str/starts-with? uri "/.application.garden/garden-email/mock")
+      (app req)
+      (let [path (strip-prefix "/.application.garden/garden-email/mock" uri)]
+        (cond
+          (= "/outbox/" path) {:status 200
+                               :headers {"Content-Type" "text/html"}
+                               :body (render-outbox)}
+          (= "/outbox/clear" path) (do (clear-outbox!)
+                                       (redirect "/.application.garden/garden-email/mock/outbox/"))
+          (str/starts-with? path "/confirm/") (let [email-address (codec/url-decode (strip-prefix "/confirm/" path))]
+                                                (swap! notification-statuses assoc email-address :notification.status/subscribed)
+                                                (html-response
+                                                 [:div.bg-slate-100.rounded.p-5
+                                                  [:p "Success. The app will be able to send you emails now."]]))
+          (str/starts-with? path "/block/") (let [email-address (codec/url-decode (strip-prefix "/block/" path))]
+                                              (swap! notification-statuses assoc email-address :notification.status/blocked)
+                                              (html-response
+                                               [:p "Success. The app will no longer be able to send you emails now."]))
+          (str/starts-with? path "/repart-spam/") (let [email-address (codec/url-decode (strip-prefix "/subscribe/" path))]
+                                                    (swap! notification-statuses assoc email-address :notification.status/blocked)
+                                                    (html-response
+                                                     [:div.bg-slate-100.rounded.p-5
+                                                      [:p "Thank you! We'll look into this. The app will no longer be able to send you emails."]]))
+          :else {:status 404})))))

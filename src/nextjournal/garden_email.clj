@@ -13,6 +13,7 @@
 
 (def auth-token (System/getenv "GARDEN_TOKEN"))
 (def dev-mode? (nil? auth-token))
+(def mock-outbox-url mock/outbox-url)
 
 (def email-endpoint (or (System/getenv "GARDEN_EMAIL_API_ENDPOINT")
                         "https://email.application.garden"))
@@ -115,15 +116,13 @@
   ([f {:keys [on-receive]
        :or {on-receive save-to-inbox!}}]
    (reset! mock/on-receive f)
-   (fn [req]
-     (if-not (str/starts-with? (:uri req) "/.application.garden/garden-email")
-       (f req)
-       (let [path (strip-prefix "/.application.garden/garden-email" (:uri req))]
-         (cond
-           (= "/receive-email" path) (handle-receive on-receive req)
-           (and dev-mode? (= "/mock-outbox" path)) {:status 200
-                                                    :headers {"Content-Type" "text/html"}
-                                                    :body (mock/render-outbox)}
-           (str/starts-with? path "/render-email/") (let [message-id (codec/url-decode (strip-prefix "/render-email/" path))]
-                                                      (handle-render-email message-id))
-           :else {:status 404}))))))
+   (mock/wrap-with-mock-outbox
+    (fn [req]
+      (if-not (str/starts-with? (:uri req) "/.application.garden/garden-email")
+        (f req)
+        (let [path (strip-prefix "/.application.garden/garden-email" (:uri req))]
+          (cond
+            (= "/receive-email" path) (handle-receive on-receive req)
+            (str/starts-with? path "/render-email/") (let [message-id (codec/url-decode (strip-prefix "/render-email/" path))]
+                                                       (handle-render-email message-id))
+            :else {:status 404})))))))
