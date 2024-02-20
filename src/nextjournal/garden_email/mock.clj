@@ -6,8 +6,8 @@
 (defonce outbox (atom {}))
 (defonce on-receive (atom nil))
 
-(defn- mock-email-http-response [_data]
-  {:status 200})
+(defn- mock-email-http-response [{:keys [message-id]}]
+  {:status 200 :body message-id})
 
 (defn- ok-email-respones? [{:keys [status]}]
   (#{202 200} status))

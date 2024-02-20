@@ -5,8 +5,10 @@
             [cheshire.core :as json]
             [ring.util.request :refer [character-encoding]]
             [ring.util.codec :as codec]
-            [nextjournal.garden-email.mock :as mock]
-            [clojure.string :as str])
+            [clojure.string :as str]
+            [malli.core :as m]
+            [nextjournal.garden-email.validate :as validate]
+            [nextjournal.garden-email.mock :as mock])
   (:import [java.io InputStream]))
 
 (def auth-token (System/getenv "GARDEN_TOKEN"))
@@ -15,7 +17,8 @@
 (def email-endpoint (or (System/getenv "GARDEN_EMAIL_API_ENDPOINT")
                         "https://email.application.garden"))
 
-(def my-email-address (System/getenv "GARDEN_EMAIL_ADDRESS"))
+(def my-email-address (or (System/getenv "GARDEN_EMAIL_ADDRESS")
+                          "my-email-address@example.com"))
 
 (defn plus-address
   ([plus]
@@ -73,14 +76,19 @@
   (http/post (str email-endpoint "/send")
              {:headers {"Content-Type" "application/json"
                         "Authorization" (str "Bearer " auth-token)}
-              :body (json/encode opts)}))
+              :body (json/encode opts)
+              :throw false}))
 
-;TODO validate (malli?)
-(defn send-email! [{:as opts :keys [from to subject text html attachments]}]
-  (let [opts (merge {:from {:email my-email-address}} opts)]
-    (if dev-mode?
-      (mock/send-email opts)
-      (send-real-email! opts))))
+(defn send-email! [{:as email :keys [from to subject text html attachments]}]
+  ;; TODO block if rate-limted ?
+  (let [email (update-in email [:from :email] #(or % my-email-address))]
+    (m/assert validate/email-schema email)
+    (let [{:keys [status body]} (if dev-mode?
+                                  (mock/send-email email)
+                                  (send-real-email! email))]
+      (if (= 200 status)
+        {:ok true :message-id body}
+        {:ok false :message body}))))
 
 (defn reply! [{:keys [subject from reply-to msg-id]} email]
   (send-email! (merge

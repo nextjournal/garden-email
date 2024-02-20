@@ -5,16 +5,22 @@
     (str name "<" email ">")
     email))
 
-(defn render-email [{:keys [message-id from to subject text html]}]
+(defn render-email [email-path {:keys [message-id from to subject text html]}]
   [:div {:style "display:flex;flex-direction:column;"}
    [:span [:span "From:"] (render-email-address from)]
    [:span [:span "To:"] (render-email-address to)]
    [:span [:span "Subject:"] subject]
    (if html
-     [:iframe {:src (str "/.application.garden/garden-email/render-email/" message-id)}]
+     [:iframe {:src (str email-path message-id)}]
      [:pre text])])
 
-(defn render-mailbox [emails]
-  [:div.flex.flex-col.text-white
-   (for [[_id email] emails]
-     (render-email email))])
+(defn render-mailbox
+  ([emails]
+   (render-mailbox emails {}))
+  ([emails {:keys [email-path]
+            :or {email-path "/.application.garden/garden-email/render-email/"}}]
+   [:div.flex.flex-col.text-white
+    (if (empty? emails)
+      [:p.italic "empty"]
+      (for [[_id email] emails]
+        (render-email email-path email)))]))
