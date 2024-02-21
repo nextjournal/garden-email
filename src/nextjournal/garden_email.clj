@@ -42,14 +42,26 @@
           (catch com.fasterxml.jackson.core.JsonParseException ex
             [false nil]))))))
 
+(defn- strip-prefix [prefix s]
+  (if (str/starts-with? s prefix)
+    (subs s (count prefix))
+    s))
+
+(defn parse-auth-token [{:as req :keys [headers]}]
+  (strip-prefix "Bearer " (headers "authorization")))
+
 (defn- handle-receive [on-receive req]
-  (let [[valid? body] (read-json req)]
-    (if valid?
-      (do (on-receive body)
-          {:status 200})
-      {:status  400
-       :headers {"Content-Type" "text/plain"}
-       :body    "Malformed JSON in request body."})))
+  ;; we use the same auth token for server -> client and client -> server communication
+  (if (= auth-token
+         (parse-auth-token req))
+    (let [[valid? body] (read-json req)]
+      (if valid?
+        (do (on-receive body)
+            {:status 200})
+        {:status  400
+         :headers {"Content-Type" "text/plain"}
+         :body    "Malformed JSON in request body."}))
+    {:status 403}))
 
 (def inbox-path (str (fs/path (System/getenv "GARDEN_STORAGE") ".mailbox")))
 
@@ -75,8 +87,8 @@
 
 (defn- send-real-email! [{:as opts :keys [from to subject text html attachments]}]
   (http/post (str email-endpoint "/send")
-             {:headers {"Content-Type" "application/json"
-                        "Authorization" (str "Bearer " auth-token)}
+             {:headers {"content-type" "application/json"
+                        "authorization" (str "Bearer " auth-token)}
               :body (json/encode opts)
               :throw false}))
 
@@ -97,11 +109,6 @@
                 email
                 {:to (or reply-to from)
                  :headers {"In-Reply-To" msg-id}})))
-
-(defn- strip-prefix [prefix s]
-  (if (str/starts-with? s prefix)
-    (subs s (count prefix))
-    s))
 
 (defn- handle-render-email [message-id]
   (if-let [email (or (inbox message-id) (@mock/outbox message-id))]
