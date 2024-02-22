@@ -79,8 +79,8 @@
     (fs/delete mail)))
 
 (defn inbox
-  ([] (map (fn [path] (edn/read-string (slurp (str path)))) (try (fs/list-dir inbox-path)
-                                                                 (catch java.nio.file.NoSuchFileException e nil))))
+  ([] (into {} (map (fn [path] [(fs/file-name path) (edn/read-string (slurp (str path)))]) (try (fs/list-dir inbox-path)
+                                                                                        (catch java.nio.file.NoSuchFileException e nil)))))
   ([message-id] (try (edn/read-string (slurp (str (fs/path inbox-path message-id))))
                      (catch Exception _ nil))))
 
