@@ -24,8 +24,11 @@ You can send email using `nextjournal.garden-email/send-email!`:
                            :from {:email garden-email/my-email-address
                                   :name "My App"}
                            :subject "Hi!"
-                           :body "Hello World!"})
+                           :text "Hello World!"
+                           :html "<html><body><h1>Hello World!</h1></body></html>"})
 ```
+
+Every parameter except for `{:to {:email "…"}}` is optional.
 
 ### Double-Opt-In
 
@@ -45,8 +48,8 @@ application.garden automatically adds a footer to unsubscribe from future emails
 You can process incoming email by adding the `nextjournal.garden-email/wrap-receive-email` middleware to your application and providing a callback:
 
 ```clojure {:nextjournal.clerk/code-listing true}
-(defn on-receive [{:keys [to from subject content]}]
-  (println (format "Received email to %s from %s with subject %s and content %s." to from subject content)))
+(defn on-receive [{:keys [message-id from to reply-to subject text html]}]
+  (println (format "Received email from %s to %s with subject %s." from to subject)))
 
 (def wrapped-ring-handler (-> my-ring-handler (garden-email/wrap-receive-email on-receive)))
 ```
@@ -60,7 +63,9 @@ If you do not provide a custom callback, garden-email saves incoming email to a 
 
 ## Development
 
-When running your application locally in development, no actual emails are sent. Instead we collect mock-emails, which you can view at `/.application.garden/garden-email/mock/outbox`, assuming you have added the ring middleware to your handler.
+When running your application locally in development, no actual emails are sent.
+Instead we collect mock-emails, which you can view at the url in `nextjournal.garden-email.mock/outbox-url`,
+assuming you have added the ring middleware to your handler.
 
 To mock incoming email, you can call `nextjournal.garden-email.mock/receive-email`.
 

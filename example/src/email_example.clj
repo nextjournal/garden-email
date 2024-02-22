@@ -1,6 +1,6 @@
 (ns email-example
-  (:require [nrepl.server]
-            [nextjournal.garden-email :as garden-email]
+  (:require [nextjournal.garden-email :as garden-email]
+            [nextjournal.garden-email.mock :as garden-email.mock]
             [nextjournal.garden-email.render :as render]
             [org.httpkit.server :as httpkit]
             [ring.middleware.params :as ring.params]
@@ -42,7 +42,7 @@
   [:ul
    [:li [:a {:href "send"} "send email"]]
    [:li [:a {:href "inbox"} "inbox"]]
-   (when garden-email/dev-mode? [:li [:a {:href garden-email/mock-outbox-url} "dev outbox"]])])
+   (when garden-email/dev-mode? [:li [:a {:href garden-email.mock/outbox-url} "dev outbox"]])])
 
 (defn page [& contents]
   (vec (concat [:div
@@ -72,7 +72,6 @@
        (garden-email/wrap-with-email)) req))
 
 (defn start! [opts]
-  (nrepl.server/start-server :bind "0.0.0.0" :port 6666)
   (httpkit/run-server #'app'
                       (merge {:legacy-return-value? false :port 7777}
                              opts))

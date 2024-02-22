@@ -13,7 +13,6 @@
 
 (def auth-token (System/getenv "GARDEN_TOKEN"))
 (def dev-mode? (nil? auth-token))
-(def mock-outbox-url mock/outbox-url)
 
 (def email-endpoint (or (System/getenv "GARDEN_EMAIL_API_ENDPOINT")
                         "https://email.application.garden"))

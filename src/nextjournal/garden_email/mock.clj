@@ -12,14 +12,14 @@
   (@notification-statuses email-address))
 
 (def ^:private host "http://localhost:7777")
-(def ^:private prefix "/.application.garden/garden-email/mock/")
+(def ^:private path-prefix "/.application.garden/garden-email/mock/")
 
 (defn confirmation-link [email-address]
-  (str host prefix "confirm/" email-address))
+  (str host path-prefix "confirm/" email-address))
 (defn block-link [email-address]
-  (str host prefix "block/" email-address))
+  (str host path-prefix "block/" email-address))
 (defn report-spam-link [email-address]
-  (str host prefix "report-spam/" email-address))
+  (str host path-prefix "report-spam/" email-address))
 
 (defonce outbox (atom {}))
 (defonce on-receive (atom nil))
@@ -77,7 +77,7 @@
 (defn render-outbox []
   (->html
    [:div.flex.flex-col.text-white
-    [:a.block.p-2.m-2.rounded.bg-emerald-700 {:href "clear"} "Clear outbox"]
+    [:a.block.p-2.m-2.rounded.bg-emerald-700 {:href "clear/"} "Clear outbox"]
     [:p "Sent emails:"]
     (render/render-mailbox @outbox)]))
 
@@ -85,8 +85,6 @@
   (if (str/starts-with? s prefix)
     (subs s (count prefix))
     s))
-
-(def outbox-url "/.application.garden/garden-email/mock/outbox/")
 
 (defn html-response [& contents]
   {:status 200
@@ -97,16 +95,18 @@
   {:status 302
    :headers {"location" to}})
 
+(def outbox-url (str "http://localhost:7777" path-prefix "outbox/"))
+
 (defn wrap-with-mock-outbox [app]
   (fn [{:as req :keys [uri]}]
-    (if-not (str/starts-with? uri "/.application.garden/garden-email/mock")
+    (if-not (str/starts-with? uri path-prefix)
       (app req)
-      (let [path (strip-prefix "/.application.garden/garden-email/mock" uri)]
+      (let [path (strip-prefix path-prefix uri)]
         (cond
-          (= "/outbox/" path) {:status 200
-                               :headers {"Content-Type" "text/html"}
-                               :body (render-outbox)}
-          (= "/outbox/clear" path) (do (clear-outbox!)
+          (= "outbox/" path) {:status 200
+                             :headers {"Content-Type" "text/html"}
+                             :body (render-outbox)}
+          (= "outbox/clear/" path) (do (clear-outbox!)
                                        (redirect "/.application.garden/garden-email/mock/outbox/"))
           (str/starts-with? path "/confirm/") (let [email-address (codec/url-decode (strip-prefix "/confirm/" path))]
                                                 (swap! notification-statuses assoc email-address :notification.status/subscribed)
