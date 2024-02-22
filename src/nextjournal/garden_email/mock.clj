@@ -104,22 +104,22 @@
       (let [path (strip-prefix path-prefix uri)]
         (cond
           (= "outbox/" path) {:status 200
-                             :headers {"Content-Type" "text/html"}
-                             :body (render-outbox)}
+                              :headers {"Content-Type" "text/html"}
+                              :body (render-outbox)}
           (= "outbox/clear/" path) (do (clear-outbox!)
                                        (redirect "/.application.garden/garden-email/mock/outbox/"))
-          (str/starts-with? path "/confirm/") (let [email-address (codec/url-decode (strip-prefix "/confirm/" path))]
-                                                (swap! notification-statuses assoc email-address :notification.status/subscribed)
-                                                (html-response
-                                                 [:div.bg-slate-100.rounded.p-5
-                                                  [:p "Success. The app will be able to send you emails now."]]))
-          (str/starts-with? path "/block/") (let [email-address (codec/url-decode (strip-prefix "/block/" path))]
-                                              (swap! notification-statuses assoc email-address :notification.status/blocked)
-                                              (html-response
-                                               [:p "Success. The app will no longer be able to send you emails now."]))
-          (str/starts-with? path "/repart-spam/") (let [email-address (codec/url-decode (strip-prefix "/subscribe/" path))]
-                                                    (swap! notification-statuses assoc email-address :notification.status/blocked)
-                                                    (html-response
-                                                     [:div.bg-slate-100.rounded.p-5
-                                                      [:p "Thank you! We'll look into this. The app will no longer be able to send you emails."]]))
+          (str/starts-with? path "confirm/") (let [email-address (codec/url-decode (strip-prefix "confirm/" path))]
+                                               (swap! notification-statuses assoc email-address :notification.status/subscribed)
+                                               (html-response
+                                                [:div.bg-slate-100.rounded.p-5
+                                                 [:p "Success. The app will be able to send you emails now."]]))
+          (str/starts-with? path "block/") (let [email-address (codec/url-decode (strip-prefix "block/" path))]
+                                             (swap! notification-statuses assoc email-address :notification.status/blocked)
+                                             (html-response
+                                              [:p "Success. The app will no longer be able to send you emails now."]))
+          (str/starts-with? path "report-spam/") (let [email-address (codec/url-decode (strip-prefix "subscribe/" path))]
+                                                   (swap! notification-statuses assoc email-address :notification.status/blocked)
+                                                   (html-response
+                                                    [:div.bg-slate-100.rounded.p-5
+                                                     [:p "Thank you! We'll look into this. The app will no longer be able to send you emails."]]))
           :else {:status 404})))))
