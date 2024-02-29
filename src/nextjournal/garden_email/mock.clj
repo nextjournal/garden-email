@@ -36,7 +36,7 @@
                                                    :block-link (block-link recipient-address)
                                                    :report-spam-link (report-spam-link recipient-address)}
                                                   email)
-        data (assoc transformed-email :message-id message-id)]
+        data (assoc transformed-email :message-id message-id :date (java.time.Instant/now))]
     (if (#{:notification.status/pending :notification.status/blocked} notification-status)
       {:status 403 :body "You are not allowed to send emails to the recipient. The recipient needs to allow sending"}
       (do (swap! outbox assoc message-id data)
@@ -64,22 +64,18 @@
      [:link {:rel "stylesheet" :href "https://fonts.bunny.net/css?family=fira-mono:400,700%7Cfira-sans:400,400i,500,500i,700,700i%7Cfira-sans-condensed:700,700i%7Cpt-serif:400,400i,700,700i"}]
      [:script {:type "text/javascript" :src "https://cdn.tailwindcss.com?plugins=typography"}]
      [:script [:hiccup/raw-html tw-config]]]
-    [:body.bg-slate-950.flex.w-screen.h-screen.justify-center.items-center
-     (vec
-      (concat
-       [:div.sm:mx-auto.sm:w-full.sm:max-w-sm
-        [:div.max-w-lg.flex.justify-center.items-center.w-full.mb-6
-         [:img {:src "https://cdn.nextjournal.com/data/QmTWkWW9XkFVWjnNLLyXbU3TvZXx9DuS4nTVpETQGCwRTV?filename=The-Garden.png&content-type=image/png"
-                :width 100
-                :height 100}]]]
-       contents))]]))
+    (into
+     [:body.bg-slate-950.flex.flex-col.w-screen.justify-center.items-center
+      [:img.m-5 {:src "https://cdn.nextjournal.com/data/QmTWkWW9XkFVWjnNLLyXbU3TvZXx9DuS4nTVpETQGCwRTV?filename=The-Garden.png&content-type=image/png"
+                 :width 100
+                 :height 100}]]
+     contents)]))
 
 (defn render-outbox []
-  (->html
-   [:div.flex.flex-col.text-white
-    [:a.block.p-2.m-2.rounded.bg-emerald-700 {:href "clear/"} "Clear outbox"]
-    [:p "Sent emails:"]
-    (render/render-mailbox @outbox)]))
+  [:div.flex.flex-col.justify-center.items-center
+   [:a.m-2.p-2.rounded.border.text-white.w-fit {:href "clear/"} "Clear outbox"]
+   [:p.m-2.text-white.text-center "Sent emails:"]
+   (render/render-mailbox @outbox)])
 
 (defn- strip-prefix [prefix s]
   (if (str/starts-with? s prefix)
@@ -103,9 +99,7 @@
       (app req)
       (let [path (strip-prefix path-prefix uri)]
         (cond
-          (= "outbox/" path) {:status 200
-                              :headers {"Content-Type" "text/html"}
-                              :body (render-outbox)}
+          (= "outbox/" path) (html-response (render-outbox))
           (= "outbox/clear/" path) (do (clear-outbox!)
                                        (redirect "/.application.garden/garden-email/mock/outbox/"))
           (str/starts-with? path "confirm/") (let [email-address (codec/url-decode (strip-prefix "confirm/" path))]

@@ -46,7 +46,7 @@
   (str email-text "\n\n" (apply str (repeat 80 "-")) "\n" footer))
 
 (defn add-html-footer [email-html footer]
-  (str/replace email-html "</body>" (str footer "</body>")))
+  (str/replace email-html "</body>" (str "<hr>" footer "</body>")))
 
 (defn txt-footer-fn [notification-status]
   (if (= :notification.status/subscribed notification-status)
