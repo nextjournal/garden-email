@@ -2,6 +2,14 @@
 
 A small helper library to send and receive email with application.garden. 
 
+## Installation
+
+Garden Email is [hosted on GitHub](https://github.com/nextjournal/garden-email) so you can simply add it as a git dependency to your `deps.edn`:
+
+```clojure {:nextjournal.clerk/code-listing true}
+{io.github.nextjournal/garden-email {:git/sha "<latest-sha>"}}
+```
+
 ## My Email Address
 
 Your own email address is available in `nextjournal.garden-email/my-email-address`.
@@ -75,4 +83,4 @@ To mock incoming email, you can call `nextjournal.garden-email.mock/receive-emai
 
 ## Example
 
-See `example` for an example application.
+See [example](https://github.com/nextjournal/garden-email/tree/main/example) for an example application.
