@@ -11,13 +11,16 @@
                   [:name {:optional true} :string]
                   [:email #'email-address]])
 
-(def html :string)
+(def non-empty-string [:re {:error/message "String cannot be empty"} #"^.+$"])
+
+;;TODO improve validation
+(def html [:re {:error/message "Invalid HTML"} #"</body>"])
 
 (def email-schema (m/schema [:map
                              [:to #'participant]
                              [:from #'participant]
                              [:subject {:optional true} :string]
-                             [:text {:optional true} :string]
+                             [:text {:optional true} #'non-empty-string]
                              [:html {:optional true} #'html]]))
 
 (comment
