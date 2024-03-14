@@ -5,7 +5,11 @@
     (str name " <" email ">")
     email))
 
-(defn render-email [email-path {:keys [message-id from to subject date text html]}]
+(defn render-email
+  "Returns Hiccup to render a single email
+
+  Takes email-path, which when suffixed with an email's message-id gives an url which return the email's HTML content, and the email"
+  [email-path {:keys [message-id from to subject date text html]}]
   [:div.flex.flex-col.bg-white.mt-5.max-w-screen-lg
    [:div.flex.flex-col.bg-slate-100.text-lg.p-5.w-full
     [:div [:span.pr-2 "From:"] (render-email-address from)]
@@ -19,6 +23,10 @@
      [:pre text])])
 
 (defn render-mailbox
+  "Returns Hiccup to render a list of emails.
+
+  Takes a list of emails and an optional map with options:
+  * `:email-path` A url, which when suffixed with an email's message-id gives an url which return the email's HTML content"
   ([emails]
    (render-mailbox emails {}))
   ([emails {:keys [email-path]

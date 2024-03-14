@@ -21,6 +21,8 @@
                           "my-email-address@example.com"))
 
 (defn plus-address
+  "Create a plus-address from an email-address and an extra identifier
+  `(plus-address\"foo@example.com\" \"bar\") ;=> \"foo+bar@example.com\"`"
   ([plus]
    (plus-address my-email-address plus))
   ([email-address plus]
@@ -46,7 +48,7 @@
     (subs s (count prefix))
     s))
 
-(defn parse-auth-token [{:as req :keys [headers]}]
+(defn- parse-auth-token [{:as req :keys [headers]}]
   (strip-prefix "Bearer " (headers "authorization")))
 
 (defn- handle-receive [on-receive req]
@@ -71,14 +73,21 @@
   (fs/create-dirs inbox-path)
   (spit (str (fs/path inbox-path message-id)) (pr-str email)))
 
-(defn delete-from-inbox! [{:as email :keys [message-id]}]
+(defn delete-from-inbox!
+  "Delete an email in the inbox. Takes email as a map, containing `:message-id`"
+  [{:as email :keys [message-id]}]
   (fs/delete-if-exists (fs/path inbox-path message-id)))
 
-(defn clear-inbox! []
+(defn clear-inbox!
+  "Deletes all emails in the inbox"
+  []
   (doseq [mail (fs/list-dir inbox-path)]
     (fs/delete mail)))
 
 (defn inbox
+  "Get messages from the inbox:
+  * `(inbox)` returns all messages in the inbox.
+  * `(inbox <message-id>)` returns the specific message identified by the message-id or nil if no matching message was found."
   ([] (into {} (map (fn [path] [(fs/file-name path) (edn/read-string (slurp (str path)))]) (try (fs/list-dir inbox-path)
                                                                                         (catch java.nio.file.NoSuchFileException e nil)))))
   ([message-id] (try (edn/read-string (slurp (str (fs/path inbox-path message-id))))
@@ -91,7 +100,34 @@
               :body (json/encode opts)
               :throw false}))
 
-(defn send-email! [{:as email :keys [from to subject text html attachments]}]
+(defn send-email!
+  "Send email
+  Takes a map with the following keys:
+
+  * `:to` a map of `:email`, the email address of the recipient and optional `:name`
+  * `:from` a map of `:email`, the email address of the sender and optional `:name`
+  * `:subject` a string with the subject line
+  * `:text` a string with plain text content of the email
+  * `:html` a string with html content of the email
+
+  Recipients need to confirm that they want to receive more email from you, after your first email.
+  To do so they need to click on a link in a footer that gets automatically added to the first email you send to a new address.
+
+  If you want to control the placement of the link in your email, you can use the `{{subscribe-link}}` placeholder, which will get replaced with the link before sending the email.
+
+  Example:
+  ```
+  (send-email! {:to {:email \"foo@example.com\"
+                     :name \"Foo Bar\"}
+                :from {:email my-email-address
+                       :name \"My App\"}
+                :subject \"Hi!\"
+                :text \"Hello World!\"
+                :html \"<html><body><h1>Hello World!</h1></body></html>\"})
+  ```
+  In development sends mock emails that end up in `nextjournal.garden-email.mock/outbox`."
+  [{:as email :keys [from to subject text html]}]
+  ;; TODO support attachments
   ;; TODO block if rate-limted ?
   (let [email (update-in email [:from :email] #(or % my-email-address))]
     (m/assert validate/email-schema email)
@@ -102,12 +138,15 @@
         {:ok true :message-id body}
         {:ok false :message body}))))
 
-(defn reply! [{:keys [subject from reply-to msg-id]} email]
-  (send-email! (merge
-                {:subject (str "Re: " subject)}
-                email
-                {:to (or reply-to from)
-                 :headers {"In-Reply-To" msg-id}})))
+(defn reply!
+  "Sends an email in reply to an existing email."
+  [email-to-reply-to email-to-send]
+  (let [{:keys [subject from reply-to msg-id]} email-to-reply-to]
+    (send-email! (merge
+                  {:subject (str "Re: " subject)}
+                  email-to-send
+                  {:to (or reply-to from)
+                   :headers {"In-Reply-To" msg-id}}))))
 
 (defn- handle-render-email [message-id]
   (if-let [email (or (inbox message-id) (@mock/outbox message-id))]
@@ -117,6 +156,10 @@
     {:status 404}))
 
 (defn wrap-with-email
+  "Ring middleware for sending and receiving email on application.garden
+
+  Takes the ring handler and an optional map with options:
+   * `:on-receive` A function to call with incoming email."
   ([f]
    (wrap-with-email f {}))
   ([f {:keys [on-receive]

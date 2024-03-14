@@ -45,7 +45,9 @@
           {:status 200
            :body message-id}))))
 
-(defn receive-email [{:as email :keys [message-id from to subject text html attachments]}]
+(defn receive-email
+  "Emulate receiving an email in dev"
+  [{:as email :keys [message-id from to subject text html attachments]}]
   (if-let [on-receive @on-receive]
     (on-receive email)
     (throw (ex-info "No on-receive hook configured. Did you forget to wrap your app with `nextjournal.garden-email/wrap-with-email`?" {}))))
