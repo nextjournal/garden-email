@@ -40,7 +40,7 @@
             body-reader (java.io.InputStreamReader. body encoding)]
         (try
           [true (json/parse-stream body-reader keyword)]
-          (catch com.fasterxml.jackson.core.JsonParseException ex
+          (catch com.fasterxml.jackson.core.JsonParseException _
             [false nil]))))))
 
 (defn- strip-prefix [prefix s]
@@ -48,7 +48,7 @@
     (subs s (count prefix))
     s))
 
-(defn- parse-auth-token [{:as req :keys [headers]}]
+(defn- parse-auth-token [{:as _req :keys [headers]}]
   (strip-prefix "Bearer " (headers "authorization")))
 
 (defn- handle-receive [on-receive req]
@@ -75,7 +75,7 @@
 
 (defn delete-from-inbox!
   "Delete an email in the inbox. Takes email as a map, containing `:message-id`"
-  [{:as email :keys [message-id]}]
+  [{:as _email :keys [message-id]}]
   (fs/delete-if-exists (fs/path inbox-path message-id)))
 
 (defn clear-inbox!
@@ -89,11 +89,11 @@
   * `(inbox)` returns all messages in the inbox.
   * `(inbox <message-id>)` returns the specific message identified by the message-id or nil if no matching message was found."
   ([] (into {} (map (fn [path] [(fs/file-name path) (edn/read-string (slurp (str path)))]) (try (fs/list-dir inbox-path)
-                                                                                        (catch java.nio.file.NoSuchFileException e nil)))))
+                                                                                        (catch java.nio.file.NoSuchFileException _ nil)))))
   ([message-id] (try (edn/read-string (slurp (str (fs/path inbox-path message-id))))
                      (catch Exception _ nil))))
 
-(defn- send-real-email! [{:as opts :keys [from to subject text html attachments]}]
+(defn- send-real-email! [{:as opts :keys [_from _to _subject _text _html _attachments]}]
   (http/post (str email-endpoint "/send")
              {:headers {"content-type" "application/json"
                         "authorization" (str "Bearer " auth-token)}
@@ -126,6 +126,7 @@
                 :html \"<html><body><h1>Hello World!</h1></body></html>\"})
   ```
   In development sends mock emails that end up in `nextjournal.garden-email.mock/outbox`."
+  #_ {:clj-kondo/ignore [:unused-binding]}
   [{:as email :keys [from to subject text html]}]
   ;; TODO support attachments
   ;; TODO block if rate-limted ?

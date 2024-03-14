@@ -7,7 +7,7 @@
     text (update :text #(str/replace % "{{subscribe-link}}" subscribe-link))
     html (update :html #(str/replace % "{{subscribe-link}}" subscribe-link))))
 
-(defn txt-footer-pending [{:keys [subscribe-link]} {:as email :keys [from]}]
+(defn txt-footer-pending [{:keys [subscribe-link]} {:as _email :keys [from]}]
   (let [{:keys [name email]} from]
     (str/join "\n" [(format "This email was sent by https://application.garden on behalf of %s." (or name email))
                     (format "If you want to continue to receive emails from %s in the future," (or name email))
@@ -16,7 +16,7 @@
                     "You can always unsubscribe later."
                     "If you do not click the link, we will not send you any more email."])))
 
-(defn txt-footer-subscribed [{:keys [block-link report-spam-link]} {:as email :keys [from]}]
+(defn txt-footer-subscribed [{:keys [block-link report-spam-link]} {:as _email :keys [from]}]
   (str/join "\n" [(format "This email was sent by https://application.garden on behalf of %s." (or (:name from) (:email from)))
                   (format "To unsubscribe from emails by %s, go to:" (or (:name from) (:email from)))
                   block-link
@@ -28,14 +28,14 @@
                            :font-size 16
                            :border-top "2px"}})
 
-(defn html-footer-pending [{:keys [subscribe-link]} {:as email :keys [from]}]
+(defn html-footer-pending [{:keys [subscribe-link]} {:as _email :keys [from]}]
   (h/html
    [:div footer-style
     [:p "This email was sent by " [:a {:href "https://application.garden" :style {:color "#666"}} "application.garden"] " on behalf of " (or (:name from) (:email from)) "."]
     [:p "If you want to continue to receive emails from application.garden in the future, click " [:a {:href subscribe-link :style {:color "#666"}} "here"]
      ". You can always unsubscribe later. If you do not click the link, we will not send you any more email."]]))
 
-(defn html-footer-subscribed [{:keys [block-link report-spam-link]} {:keys [project-id from to]}]
+(defn html-footer-subscribed [{:keys [block-link report-spam-link]} {:as _email :keys [from]}]
   (h/html
    [:div footer-style
     [:p "This email was sent by " [:a {:href "https://application.garden" :style {:color "#666"}} "application.garden"] " on behalf of " (or (:name from) (:email from)) "."]

@@ -27,7 +27,8 @@
 (defn clear-outbox! []
   (reset! outbox {}))
 
-(defn send-email [{:as email :keys [from to subject text html attachments]}]
+(defn send-email #_ {:clj-kondo/ignore [:unused-binding]}
+  [{:as email :keys [from to subject text html attachments]}]
   (let [message-id (str "<" (random-uuid) "@nextjournal.com>")
         recipient-address (:email to)
         notification-status (notification-status recipient-address)
@@ -47,6 +48,7 @@
 
 (defn receive-email
   "Emulate receiving an email in dev"
+  #_ {:clj-kondo/ignore [:unused-binding]}
   [{:as email :keys [message-id from to subject text html attachments]}]
   (if-let [on-receive @on-receive]
     (on-receive email)
