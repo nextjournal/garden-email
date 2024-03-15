@@ -11,7 +11,7 @@
                   [:name {:optional true} :string]
                   [:email #'email-address]])
 
-(def non-empty-string [:re {:error/message "String cannot be empty"} #"^.+$"])
+(def non-empty-string [:re {:error/message "String cannot be empty"} #".+"])
 
 ;;TODO improve validation
 (def html [:re {:error/message "Invalid HTML"} #"</body>"])
