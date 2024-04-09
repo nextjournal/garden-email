@@ -1,4 +1,6 @@
-(ns nextjournal.garden-email.render)
+(ns nextjournal.garden-email.render
+  (:import (java.time ZonedDateTime)
+           (java.time.format DateTimeFormatter DateTimeParseException)))
 
 (defn render-email-address [{:keys [email name]}]
   (if name
@@ -22,6 +24,15 @@
                             :src (str email-path message-id)}]
      [:pre text])])
 
+(defn guard [p f] (fn [x] (when (p x) (f x))))
+
+(def email-date-format (DateTimeFormatter/ofPattern "EEE, dd MMM yyyy HH:mm:ss zzz"))
+
+(defn parse-email-date [datetime]
+  (try
+    (ZonedDateTime/parse datetime email-date-format)
+    (catch DateTimeParseException _ nil)))
+
 (defn render-mailbox
   "Returns Hiccup to render a list of emails.
 
@@ -31,8 +42,11 @@
    (render-mailbox emails {}))
   ([emails {:keys [email-path]
             :or {email-path "/.application.garden/garden-email/render-email/"}}]
-   [:div.flex.flex-col 
+   [:div.flex.flex-col
     (if (empty? emails)
       [:p.italic "empty"]
-      (for [email (sort-by :date (vals emails))]
-        (render-email email-path email)))]))
+      (into [:div]
+            (map (partial render-email email-path))
+            (sort-by (comp (guard string? parse-email-date) :date)
+                     #(try (.compareTo %2 %1) (catch Exception _ (if (nil? %1) 1 -1)))
+                     (vals emails))))]))
