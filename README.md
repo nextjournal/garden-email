@@ -60,7 +60,7 @@ You can process incoming email by adding the `nextjournal.garden-email/wrap-with
   (println (format "Received email from %s to %s with subject %s." from to subject)))
 
 (def wrapped-ring-handler
-  (-> my-ring-handler (garden-email/wrap-receive-email {:on-receive on-receive})))
+  (-> my-ring-handler (garden-email/wrap-with-email {:on-receive on-receive})))
 ```
 
 If you do not provide a custom callback, garden-email saves incoming email to a mailbox in persistent storage, which you can interact with using the following functions:
