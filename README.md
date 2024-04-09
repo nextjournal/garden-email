@@ -53,13 +53,14 @@ application.garden automatically adds a footer to unsubscribe from future emails
 
 ## Receiving Email
 
-You can process incoming email by adding the `nextjournal.garden-email/wrap-receive-email` middleware to your application and providing a callback:
+You can process incoming email by adding the `nextjournal.garden-email/wrap-with-email` middleware to your application and providing a callback:
 
 ```clojure {:nextjournal.clerk/code-listing true}
 (defn on-receive [{:keys [message-id from to reply-to subject text html]}]
   (println (format "Received email from %s to %s with subject %s." from to subject)))
 
-(def wrapped-ring-handler (-> my-ring-handler (garden-email/wrap-receive-email on-receive)))
+(def wrapped-ring-handler
+  (-> my-ring-handler (garden-email/wrap-receive-email {:on-receive on-receive})))
 ```
 
 If you do not provide a custom callback, garden-email saves incoming email to a mailbox in persistent storage, which you can interact with using the following functions:
