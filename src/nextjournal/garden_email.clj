@@ -193,7 +193,7 @@
 
 (defn- handle-render-email [{:keys [path-params]}]
   (let [{:keys [message-id]} path-params]
-    (if-let [email (or (inbox message-id) (outbox message-id))]
+    (if-let [email (or (inbox message-id) (@outbox message-id))]
       {:status 200
        :headers {"Content-Type" "text/html"}
        :body (:html email)}
