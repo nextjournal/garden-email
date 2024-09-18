@@ -3,22 +3,35 @@
             [babashka.http-client :as http]
             [babashka.fs :as fs]
             [cheshire.core :as json]
-            [ring.util.request :refer [character-encoding]]
-            [ring.util.codec :as codec]
             [clojure.string :as str]
             [malli.core :as m]
+            [malli.error :as me]
+            [reitit.core :as r]
+            [reitit.ring :as rr]
+            [nextjournal.garden-email.render :as render]
             [nextjournal.garden-email.validate :as validate]
-            [nextjournal.garden-email.mock :as mock])
-  (:import [java.io InputStream]))
+            [nextjournal.garden-email.shared :as shared]))
 
-(def auth-token (System/getenv "GARDEN_TOKEN"))
-(def dev-mode? (nil? auth-token))
+;; consistent dummy uuid for local dev
+(def dev-id #uuid "c8de9f02-af56-419c-bac6-91f3e96c57cb")
 
-(def email-endpoint (or (System/getenv "GARDEN_EMAIL_API_ENDPOINT")
-                        "https://email.application.garden"))
+(def create-token json/generate-string)
 
-(def my-email-address (or (System/getenv "GARDEN_EMAIL_ADDRESS")
-                          "my-email-address@example.com"))
+(defn parse-token [token]
+  (some-> token
+          (json/parse-string keyword)
+          (update :project-id parse-uuid)
+          (update :type keyword)))
+
+(def dev-mode? (nil? (System/getenv "GARDEN_TOKEN")))
+
+(def auth-token (if dev-mode?
+                  (create-token {:project-id dev-id :type :project-token})
+                  (System/getenv "GARDEN_TOKEN")))
+
+(def email-endpoint (System/getenv "GARDEN_API_ENDPOINT"))
+
+(def ^:dynamic my-email-address (shared/project-email-address (System/getenv "GARDEN_PROJECT_NAME")))
 
 (defn plus-address
   "Create a plus-address from an email-address and an extra identifier
@@ -28,34 +41,59 @@
   ([email-address plus]
    (str/replace-first email-address "@" (str "+" plus "@"))))
 
-(defn- json-request? [request]
-  (when-let [type (get-in request [:headers "content-type"])]
-    (some? (re-find #"^application/(.+\+)?json" type))))
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; mock
 
-(defn- read-json [request]
-  (when (json-request? request)
-    (when-let [^InputStream body (:body request)]
-      (let [^String encoding (or (character-encoding request)
-                                 "UTF-8")
-            body-reader (java.io.InputStreamReader. body encoding)]
-        (try
-          [true (json/parse-stream body-reader keyword)]
-          (catch com.fasterxml.jackson.core.JsonParseException _
-            [false nil]))))))
+(def host "http://localhost:7777")
 
-(defn- strip-prefix [prefix s]
-  (if (str/starts-with? s prefix)
-    (subs s (count prefix))
-    s))
+(defonce notification-statuses (atom {}))
+(defn set-notification-status! [_project-id recipient-address status]
+  (swap! notification-statuses assoc recipient-address status))
+(defn notification-status [_project-id recipient-address]
+  (@notification-statuses recipient-address))
 
-(defn- parse-auth-token [{:as _req :keys [headers]}]
-  (strip-prefix "Bearer " (headers "authorization")))
+(defonce buffered-emails (atom {}))
+(defn buffer-email! [_project-id email]
+  (let [recipient-address (-> email :to :email)]
+    (swap! buffered-emails assoc recipient-address email)))
+(defn buffered-email [_project-id recipient-address]
+  (@buffered-emails recipient-address))
+
+(defonce outbox (atom {}))
+(defn clear-outbox! []
+  (reset! outbox {}))
+
+(defn send! [email]
+  (let [message-id (str "<" (random-uuid) "@nextjournal.com>")
+        data (assoc email :message-id message-id :date (java.time.Instant/now))]
+    (swap! outbox assoc message-id data)
+    message-id))
+
+(defn project-name [_project-id] (System/getenv "GARDEN_PROJECT_NAME"))
+
+(defonce !on-receive (atom nil))
+
+(defn receive-email
+  "Emulate receiving an email in dev"
+  #_ {:clj-kondo/ignore [:unused-binding]}
+  [{:as email :keys [message-id from to subject text html attachments]}]
+  (if-let [on-receive @!on-receive]
+    (on-receive email)
+    (throw (ex-info "No on-receive hook configured. Did you forget to wrap your app with `nextjournal.garden-email/wrap-with-email`?" {}))))
+
+(defn render-outbox []
+  [:div.flex.flex-col.justify-center.items-center
+   [:a.m-2.p-2.rounded.border.text-white.w-fit {:href "clear/"} "Clear outbox"]
+   [:p.m-2.text-white.text-center "Sent emails:"]
+   (render/render-mailbox @outbox)])
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; receiving email
 
 (defn- handle-receive [on-receive req]
   ;; we use the same auth token for server -> client and client -> server communication
-  (if (= auth-token
-         (parse-auth-token req))
-    (let [[valid? body] (read-json req)]
+  (if (= auth-token (shared/auth-token req))
+    (let [[valid? body] (shared/read-json req)]
       (if valid?
         (do (on-receive body)
             {:status 200})
@@ -64,7 +102,7 @@
          :body    "Malformed JSON in request body."}))
     {:status 403}))
 
-(def inbox-path (str (fs/path (System/getenv "GARDEN_STORAGE") ".mailbox")))
+(def inbox-path (str (fs/path (System/getenv "GARDEN_STORAGE") ".application.garden/garden-email/mailbox")))
 
 ;;TODO
 ;; - [ ] better serialization? (maildir?)
@@ -93,13 +131,10 @@
   ([message-id] (try (edn/read-string (slurp (str (fs/path inbox-path message-id))))
                      (catch Exception _ nil))))
 
-(defn- send-real-email! [{:as opts :keys [_from _to _subject _text _html _attachments]}]
-  (http/post (str email-endpoint "/send")
-             {:headers {"content-type" "application/json"
-                        "authorization" (str "Bearer " auth-token)}
-              :body (json/encode opts)
-              :throw false}))
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; sending email
 
+(declare router)
 (defn send-email!
   "Send email
   Takes a map with the following keys:
@@ -110,10 +145,7 @@
   * `:text` a string with plain text content of the email
   * `:html` a string with html content of the email
 
-  Recipients need to confirm that they want to receive more email from you, after your first email.
-  To do so they need to click on a link in a footer that gets automatically added to the first email you send to a new address.
-
-  If you want to control the placement of the link in your email, you can use the `{{subscribe-link}}` placeholder, which will get replaced with the link before sending the email.
+  Your first email to a new address is buffered until the recipient confirms that they want to receive email from you.
 
   Example:
   ```
@@ -125,21 +157,29 @@
                 :text \"Hello World!\"
                 :html \"<html><body><h1>Hello World!</h1></body></html>\"})
   ```
-  In development sends mock emails that end up in `nextjournal.garden-email.mock/outbox`."
+  In development sends mock emails that end up in `nextjournal.garden-email/outbox`."
   #_ {:clj-kondo/ignore [:unused-binding]}
   [{:as email :keys [from to subject text html]}]
   ;; TODO support attachments
-  ;; TODO block if rate-limted ?
+  ;; TODO block if rate-limted?
   (let [email (update-in email [:from :email] #(or % my-email-address))]
-    (m/assert validate/email-schema email)
-    (let [{:keys [status body]} (if dev-mode?
-                                  (mock/send-email email)
-                                  (send-real-email! email))]
-      (if (= 200 status)
-        {:ok true :message-id body}
-        {:ok false :message body}))))
+    (if (m/validate validate/email-schema email)
+      (let [url (if dev-mode?
+                  (str host (-> (r/match-by-name router :email/send)
+                                (r/match->path)))
+                  (str email-endpoint "/send"))
+            {:keys [status body]} (http/post url {:headers {"content-type" "application/json"
+                                                            "authorization" (str "Bearer " auth-token)}
+                                                  :body (json/encode email)
+                                                  :throw false})]
+        (if (= 200 status)
+          {:ok true :message-id body}
+          {:ok false :message body}))
+      {:ok false :message (-> (m/explain validate/email-schema email)
+                              (me/humanize))})))
 
-(defn reply!
+;;FIXME broken
+#_(defn reply!
   "Sends an email in reply to an existing email."
   [email-to-reply-to email-to-send]
   (let [{:keys [subject from reply-to msg-id]} email-to-reply-to]
@@ -149,12 +189,40 @@
                   {:to (or reply-to from)
                    :headers {"In-Reply-To" msg-id}}))))
 
-(defn- handle-render-email [message-id]
-  (if-let [email (or (inbox message-id) (@mock/outbox message-id))]
-    {:status 200
-     :headers {"Content-Type" "text/html"}
-     :body (:html email)}
-    {:status 404}))
+;; routes
+
+(defn- handle-render-email [{:keys [path-params]}]
+  (let [{:keys [message-id]} path-params]
+    (if-let [email (or (inbox message-id) (outbox message-id))]
+      {:status 200
+       :headers {"Content-Type" "text/html"}
+       :body (:html email)}
+      {:status 404})))
+
+(defn- handle-render-outbox [_req]
+  (shared/html-response (render-outbox)))
+
+(def prefix "/.application.garden/garden-email")
+(def router (rr/router [[prefix
+                         (concat [["/receive" {:post handle-receive}]
+                                  ["/render-email/:message-id" {:get handle-render-email}]]
+                                 (when dev-mode?
+                                   (concat (shared/routes {:host #'host
+                                                           :project-name #'project-name
+                                                           :create-token #'create-token
+                                                           :parse-token #'parse-token
+                                                           :buffer-email! #'buffer-email!
+                                                           :buffered-email #'buffered-email
+                                                           :notification-status #'notification-status
+                                                           :set-notification-status! #'set-notification-status!
+                                                           :send! #'send!})
+                                           [["/outbox" {:get handle-render-outbox
+                                                        :name ::outbox}]])))]]))
+
+(def outbox-url (str host (-> (r/match-by-name router ::outbox)
+                              (r/match->path))))
+
+(def handler (rr/ring-handler router))
 
 (defn wrap-with-email
   "Ring middleware for sending and receiving email on application.garden
@@ -165,14 +233,8 @@
    (wrap-with-email f {}))
   ([f {:keys [on-receive]
        :or {on-receive save-to-inbox!}}]
-   (reset! mock/on-receive f)
-   (mock/wrap-with-mock-outbox
-    (fn [req]
-      (if-not (str/starts-with? (:uri req) "/.application.garden/garden-email")
-        (f req)
-        (let [path (strip-prefix "/.application.garden/garden-email" (:uri req))]
-          (cond
-            (= "/receive-email" path) (handle-receive on-receive req)
-            (str/starts-with? path "/render-email/") (let [message-id (codec/url-decode (strip-prefix "/render-email/" path))]
-                                                       (handle-render-email message-id))
-            :else {:status 404})))))))
+   (reset! !on-receive on-receive)
+   (fn [req]
+     (if-not (str/starts-with? (:uri req) prefix)
+       (f req)
+       (handler req)))))

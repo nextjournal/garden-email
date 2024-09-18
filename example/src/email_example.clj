@@ -1,6 +1,5 @@
 (ns email-example
   (:require [nextjournal.garden-email :as garden-email]
-            [nextjournal.garden-email.mock :as garden-email.mock]
             [nextjournal.garden-email.render :as render]
             [org.httpkit.server :as httpkit]
             [ring.middleware.params :as ring.params]
@@ -42,7 +41,7 @@
   [:ul
    [:li [:a {:href "send"} "send email"]]
    [:li [:a {:href "inbox"} "inbox"]]
-   (when garden-email/dev-mode? [:li [:a {:href garden-email.mock/outbox-url} "dev outbox"]])])
+   (when garden-email/dev-mode? [:li [:a {:href garden-email/outbox-url} "dev outbox"]])])
 
 (defn page [& contents]
   (vec (concat [:div

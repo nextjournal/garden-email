@@ -40,12 +40,10 @@ Every parameter except for `{:to {:email "…"}}` is optional.
 
 ### Double-Opt-In
 
-Recipients need to confirm that they want to receive more email from you, after your first email.
-To do so they need to click on a link in a footer that gets automatically added to the first email you send to a new address.
+The first time you send an email to a new email address, the recipient gets a generic email to confirm that they want to receive your email.
+Your original email gets buffered and sent to the recipient, as soon as they confirm that they want your email.
 
-If you want to control the placement of the link in your email, you can use the `{{subscribe-link}}` placeholder, which will get replaced with the link before sending the email.
-
-You are blocked from sending more email to that address, until the recipient clicks the link.
+You are blocked from sending more email to that address, until the recipient confirms that they want your email.
 
 After the recipient confirmed they want to receive further email, you can continue sending email as usual.
 application.garden automatically adds a footer to unsubscribe from future emails to every email.
@@ -73,10 +71,10 @@ If you do not provide a custom callback, garden-email saves incoming email to a 
 ## Development
 
 When running your application locally in development, no actual emails are sent.
-Instead we collect mock-emails, which you can view at the url in `nextjournal.garden-email.mock/outbox-url`,
+Instead we collect mock-emails, which you can view at the url in `nextjournal.garden-email/outbox-url`,
 assuming you have added the ring middleware to your handler.
 
-To mock incoming email, you can call `nextjournal.garden-email.mock/receive-email`.
+To mock incoming email, you can call `nextjournal.garden-email/receive-email`.
 
 ## Mailbox
 
