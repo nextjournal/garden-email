@@ -14,6 +14,8 @@
   (:import [java.io InputStream]
            [java.util.concurrent TimeUnit]))
 
+(def dev-mode? (nil? (System/getenv "GARDEN_TOKEN")))
+
 (defn project-email-address [project-name]
   (str project-name "@" "apps.garden"))
 
@@ -148,7 +150,7 @@
               (#{:notification.status/subscribed} notification-status)
               (let [{:keys [limited? retry-after]} (limited? {:project-id project-id
                                                               :recipient recipient-addr})]
-                (when limited?
+                (when (and limited? (not dev-mode?))
                   (throw (ex-info "Rate-limit reached" {:status 429
                                                         :headers {"Retry-After" retry-after}})))
                 (if-let [message-id (send-project-email! {:host host
