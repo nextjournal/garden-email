@@ -83,7 +83,7 @@
 
 (defn render-outbox []
   [:div.flex.flex-col.justify-center.items-center
-   [:a.m-2.p-2.rounded.border.text-white.w-fit {:href "clear/"} "Clear outbox"]
+   [:a.m-2.p-2.rounded.border.text-white.w-fit {:href "clear"} "Clear outbox"]
    [:p.m-2.text-white.text-center "Sent emails:"]
    (render/render-mailbox @outbox)])
 
@@ -202,12 +202,17 @@
 (defn- handle-render-outbox [_req]
   (shared/html-response (render-outbox)))
 
+(defn- handle-clear-outbox [_]
+  (clear-outbox!)
+  {:status 302 :headers {"location" (-> (r/match-by-name router ::outbox)
+                                        (r/match->path))}})
+
 (def prefix "/.application.garden/garden-email")
 (def router (rr/router [[prefix
-                         (concat [["/receive" {:post handle-receive}]
-                                  ["/render-email/:message-id" {:get handle-render-email}]]
+                         (concat [["/receive" {:post #'handle-receive}]
+                                  ["/render-email/:message-id" {:get #'handle-render-email}]]
                                  (when dev-mode?
-                                   (concat (shared/routes {:host #'host
+                                   (concat (shared/routes {:host host
                                                            :project-name #'project-name
                                                            :create-token #'create-token
                                                            :parse-token #'parse-token
@@ -216,8 +221,9 @@
                                                            :notification-status #'notification-status
                                                            :set-notification-status! #'set-notification-status!
                                                            :send! #'send!})
-                                           [["/outbox" {:get handle-render-outbox
-                                                        :name ::outbox}]])))]]))
+                                           [["/outbox" {:get #'handle-render-outbox
+                                                        :name ::outbox}]
+                                            ["/clear" {:get #'handle-clear-outbox}]])))]]))
 
 (def outbox-url (str host (-> (r/match-by-name router ::outbox)
                               (r/match->path))))
